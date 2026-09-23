@@ -49,7 +49,7 @@ button,.linkbtn{border:0;border-radius:10px;padding:12px 14px;font-weight:700;fo
 <div class="name" id="cardName">検索中…</div>
 <div class="muted" id="setName"></div>
 <div class="price" id="kingPrice">—</div>
-<div class="muted">トレカキングダム表示価格</div>
+<div class="muted">トレカキングダム買取価格</div>
 </div>
 </div>
 <div class="row" style="margin-top:14px">
@@ -59,7 +59,7 @@ button,.linkbtn{border:0;border-radius:10px;padding:12px 14px;font-weight:700;fo
 </section>
 
 <section class="card" id="marketCard" style="display:none">
-<h2 style="font-size:17px;margin:0 0 8px">価格管理</h2>
+<h2 style="font-size:17px;margin:0 0 8px">買取価格管理</h2>
 <div class="muted" style="margin-bottom:8px">自動取得できないサイトは検索結果を開いて価格を確認し、入力して保存できます。</div>
 <div id="sites"></div>
 <button class="primary" id="save">このカードを保存</button>
@@ -103,8 +103,9 @@ function rakutenUrl(code,name=""){
 }
 
 async function tcgdex(code){
-  // TCGdex can resolve an exact card when the set ID is known.
-  const url="https://api.tcgdex.net/v2/ja/cards/"+encodeURIComponent(code.set)+"/"+encodeURIComponent(code.localId);
+  // TCGdex single-card endpoint uses the combined card ID: {setId}-{localId}.
+  const id = code.set.toLowerCase()+"-"+code.localId;
+  const url="https://api.tcgdex.net/v2/ja/cards/"+encodeURIComponent(id);
   const r=await fetch(url);
   if(!r.ok) throw new Error("TCGdex "+r.status);
   return await r.json();
@@ -141,7 +142,7 @@ async function search(){
 }
 function buildSites(code,name){
   const sites=[
-    ["トレカキングダム",cardKingdomUrl(code,name),"king"],
+    ["トレカキングダム買取", "https://shop.japan-toreca.com/search?q="+esc((name||"")+" "+code.localId+" "+code.total+" 買取"),"king"],
     ["メルカリ",mercariUrl(code,name),"mercari"],
     ["Yahoo!オークション",yahooUrl(code,name),"yahoo"],
     ["楽天市場",rakutenUrl(code,name),"rakuten"]
@@ -180,7 +181,7 @@ function renderSaved(){
   $("savedList").innerHTML=arr.map(x=>{
     const vals=Object.values(x.prices).filter(v=>v>0);
     const max=vals.length?Math.max(...vals):0;
-    return `<div class="saved"><div><b>${x.name}</b><br><span class="muted">${x.code} / ${x.savedAt}</span><br>管理価格：${max?max.toLocaleString()+"円":"未入力"}</div><button class="danger" onclick="del(${x.id})">削除</button></div>`;
+    return `<div class="saved"><div><b>${x.name}</b><br><span class="muted">${x.code} / ${x.savedAt}</span><br>最高買取価格：${max?max.toLocaleString()+"円":"未入力"}</div><button class="danger" onclick="del(${x.id})">削除</button></div>`;
   }).join("");
 }
 function del(id){
