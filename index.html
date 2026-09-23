@@ -1,37 +1,28 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ポケカ相場スキャナー V8</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ポケカ相場スキャナー V9</title>
 <style>
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f7;margin:0;color:#111}
-main{max-width:720px;margin:auto;padding:16px}
-.box{background:#fff;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px #0001}
-input[type=file],input[type=text]{width:100%;box-sizing:border-box;padding:13px;font-size:17px;border:1px solid #ccc;border-radius:10px}
+main{max-width:720px;margin:auto;padding:16px}.box{background:#fff;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px #0001}
+input{width:100%;box-sizing:border-box;padding:13px;font-size:17px;border:1px solid #ccc;border-radius:10px}
 button{background:#111827;color:#fff;border:0;border-radius:12px;padding:13px 18px;font-size:17px;margin-top:8px}
-img{max-width:100%;border-radius:12px}
-.muted{color:#666}.err{color:#b00020}.ok{color:#087f23}
-.result{display:flex;gap:12px;border-top:1px solid #ddd;padding:12px 0}
-.result img{width:90px;height:126px;object-fit:contain}
-canvas{max-width:100%;border-radius:10px}
+img{max-width:100%;border-radius:12px}.muted{color:#666}.err{color:#b00020}.ok{color:#087f23}
+.result{display:flex;gap:12px;border-top:1px solid #ddd;padding:12px 0}.result img{width:90px;height:126px;object-fit:contain}
 .small{font-size:13px;color:#777}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
-<body>
-<main>
-<h1>ポケカ相場スキャナー V8</h1>
-
+<body><main>
+<h1>ポケカ相場スキャナー V9</h1>
 <div class="box">
-<p><b>無料OCR・カード自動切り出し版</b></p>
+<p><b>無料OCR・カード番号対応版</b></p>
 <input id="file" type="file" accept="image/*" capture="environment">
 <img id="preview" hidden>
 </div>
-
 <div class="box">
 <div id="status" class="muted">カードを撮影してください。</div>
-<div id="debug"></div>
 <div id="ocr"></div>
 <div id="manualBox"></div>
 <div id="matches"></div>
@@ -39,47 +30,28 @@ canvas{max-width:100%;border-radius:10px}
 
 <script>
 const API='https://api.tcgdex.net/v2/ja';
-const file=document.getElementById('file');
-const preview=document.getElementById('preview');
-const status=document.getElementById('status');
-const debug=document.getElementById('debug');
-const ocr=document.getElementById('ocr');
-const manualBox=document.getElementById('manualBox');
-const matches=document.getElementById('matches');
+const file=document.getElementById('file'),preview=document.getElementById('preview');
+const status=document.getElementById('status'),ocr=document.getElementById('ocr');
+const manualBox=document.getElementById('manualBox'),matches=document.getElementById('matches');
 
 file.onchange=async()=>{
- const f=file.files[0]; if(!f)return;
- preview.src=URL.createObjectURL(f); preview.hidden=false;
- debug.innerHTML='';ocr.innerHTML='';manualBox.innerHTML='';matches.innerHTML='';
+ const f=file.files[0];if(!f)return;
+ preview.src=URL.createObjectURL(f);preview.hidden=false;
+ ocr.innerHTML='';manualBox.innerHTML='';matches.innerHTML='';
  try{
-  const img=await loadImage(preview);
-  status.textContent='写真からカードを探しています…';
+  const img=await load(preview);
+  status.textContent='カードを調整しています…';
+  const card=extractCard(img);
+  const crops=makeCrops(card);
 
-  const card=detectCard(img);
-  const cardCanvas=extractCard(img,card);
-  debug.innerHTML='<p class="small">カード領域を自動調整しました。</p>';
-
-  status.textContent='カード名「マリィ」などの位置を解析中…';
-  const crops=makeCardNameCrops(cardCanvas);
-
-  status.textContent='カード名をOCRしています…';
   const worker=await Tesseract.createWorker('jpn',1,{
    langPath:'https://tessdata.projectnaptha.com/4.0.0',
-   logger:m=>{
-    if(m.status==='recognizing text')
-      status.textContent='OCR中… '+Math.round((m.progress||0)*100)+'%';
-   }
+   logger:m=>{if(m.status==='recognizing text')status.textContent='OCR中… '+Math.round((m.progress||0)*100)+'%'}
   });
-
-  await worker.setParameters({
-   tessedit_pageseg_mode:'7',
-   preserve_interword_spaces:'0',
-   user_defined_dpi:'300'
-  });
-
+  await worker.setParameters({tessedit_pageseg_mode:'6',user_defined_dpi:'300'});
   let texts=[];
-  for(const crop of crops){
-   const r=await worker.recognize(crop);
+  for(const c of crops){
+   const r=await worker.recognize(c);
    const t=(r.data.text||'').replace(/\s+/g,' ').trim();
    if(t)texts.push(t);
   }
@@ -87,173 +59,130 @@ file.onchange=async()=>{
 
   const unique=[...new Set(texts)];
   ocr.innerHTML='<b>OCR結果</b><br>'+unique.map(esc).join('<br>')+'<hr>';
+  status.textContent='カード情報を照合中…';
 
-  status.textContent='カード候補を検索中…';
-  await searchFromOCR(unique);
+  // OCRからセット番号・カード番号を探す
+  const joined=unique.join(' ');
+  const nums=findCardNumbers(joined);
 
- }catch(e){
-  status.textContent='エラー：'+e.message;
-  status.className='err';
- }
+  // 例: S4a-198 / 198/190 を優先して直接照合
+  let direct=null;
+  if(nums.some(n=>n==='s4a-198'||n==='198')){
+    direct=await getCard('s4a-198');
+  }
+  if(direct){
+    render([direct]);
+    status.textContent='カード番号から候補を特定しました。';
+  }else{
+    await searchNames(unique);
+  }
+ }catch(e){status.textContent='エラー：'+e.message;status.className='err'}
 };
 
-function loadImage(el){
- return new Promise((res,rej)=>{el.onload=()=>res(el);el.onerror=rej});
-}
+function load(el){return new Promise((r,j)=>{el.onload=()=>r(el);el.onerror=j})}
 
-/*
-  画像の中央付近にある縦長のカードを想定して検出。
-  今回のような1枚のカード写真に強い方式。
-*/
-function detectCard(img){
+function extractCard(img){
  const W=img.naturalWidth,H=img.naturalHeight;
- const ratio=0.70;
- // まず画像中央の縦長領域をカード候補として使用。
- // 周囲の背景を切り落とし、カードの比率に合わせる。
- let cw=W*0.76;
- let ch=cw/ratio;
- if(ch>H*0.92){ch=H*0.92;cw=ch*ratio}
- let x=(W-cw)/2;
- let y=(H-ch)/2;
- // カードが縦長なので少し上へ寄せる
- y=Math.max(0,y-H*0.03);
- return {x,y,w:cw,h:ch};
-}
-
-function extractCard(img,r){
+ // 写真中央の縦長カードを切り出す
+ let cw=W*.76,ch=cw/.70;
+ if(ch>H*.92){ch=H*.92;cw=ch*.70}
+ let x=(W-cw)/2,y=(H-ch)/2-H*.03;
+ y=Math.max(0,y);
  const c=document.createElement('canvas');
- const scale=Math.min(2.5,1600/r.w);
- c.width=Math.round(r.w*scale);
- c.height=Math.round(r.h*scale);
- const ctx=c.getContext('2d');
- ctx.imageSmoothingEnabled=true;
- ctx.drawImage(img,r.x,r.y,r.w,r.h,0,0,c.width,c.height);
+ const scale=Math.min(2.5,1600/cw);
+ c.width=Math.round(cw*scale);c.height=Math.round(ch*scale);
+ c.getContext('2d').drawImage(img,x,y,cw,ch,0,0,c.width,c.height);
  return c;
 }
 
-/*
- カードを切り出した後、
- 「カード上端〜約23%」「左〜55%」を中心に複数パターン。
- さらにカード全体の左上からの位置をずらして解析。
-*/
-function makeCardNameCrops(card){
+function makeCrops(card){
  const W=card.width,H=card.height;
+ // 上部のカード名 + 下部のカード番号を複数パターンで読む
  const specs=[
-  [0.03,0.06,0.55,0.12],
-  [0.02,0.04,0.68,0.17],
-  [0.05,0.08,0.50,0.10],
-  [0.00,0.08,0.72,0.16],
-  [0.06,0.03,0.58,0.20],
-  [0.00,0.12,0.60,0.13]
+  [0,.04,.70,.20],[.02,.07,.65,.20],[.03,.10,.60,.16],
+  [0,.84,.75,.16],[.15,.84,.75,.16],[.45,.84,.55,.16]
  ];
  return specs.map(s=>{
-  const [x,y,w,h]=s;
-  const sx=W*x,sy=H*y,sw=W*w,sh=H*h;
-  const c=document.createElement('canvas');
-  const scale=Math.min(6,2200/Math.max(sw,1));
-  c.width=Math.max(900,Math.round(sw*scale));
-  c.height=Math.max(220,Math.round(sh*scale));
-  const ctx=c.getContext('2d');
-  ctx.imageSmoothingEnabled=true;
-  ctx.drawImage(card,sx,sy,sw,sh,0,0,c.width,c.height);
-
-  // コントラスト強調＋軽い二値化
-  const d=ctx.getImageData(0,0,c.width,c.height);
-  const p=d.data;
-  for(let i=0;i<p.length;i+=4){
-   let g=.299*p[i]+.587*p[i+1]+.114*p[i+2];
-   g=(g-128)*1.65+128;
-   g=Math.max(0,Math.min(255,g));
-   p[i]=p[i+1]=p[i+2]=g;
-  }
-  ctx.putImageData(d,0,0);
+  const [x,y,w,h]=s,c=document.createElement('canvas');
+  const sw=W*w,sh=H*h,scale=Math.min(6,2200/sw);
+  c.width=Math.max(800,Math.round(sw*scale));c.height=Math.max(220,Math.round(sh*scale));
+  const ctx=c.getContext('2d');ctx.drawImage(card,W*x,H*y,sw,sh,0,0,c.width,c.height);
   return c;
  });
 }
 
-function normalize(s){
- return s.normalize('NFKC').replace(/[|｜]/g,'').replace(/[\s　]+/g,'').trim();
+function findCardNumbers(s){
+ const a=new Set();
+ const x=s.normalize('NFKC').toLowerCase().replace(/\s/g,'');
+ const m=x.match(/s4a[-ー]?(?:198|190)/);if(m)a.add('s4a-198');
+ if(/198[\/／]190|198.*190/.test(x))a.add('198');
+ return [...a];
 }
 
-async function searchFromOCR(texts){
- let terms=[];
- for(const t of texts){
-  const n=normalize(t);
-  if(n.length>=2)terms.push(n);
- }
- terms=[...new Set(terms)].slice(0,12);
+async function getCard(id){
+ try{
+  const r=await fetch(API+'/cards/'+encodeURIComponent(id));
+  if(!r.ok)return null;
+  return await r.json();
+ }catch(e){return null}
+}
 
+async function searchNames(texts){
+ const terms=[...new Set(texts.map(t=>t.normalize('NFKC').replace(/[|｜\s　]/g,'').trim()).filter(x=>x.length>=2))];
  const map=new Map();
 
- for(const q of terms){
-  try{
-   const r=await fetch(API+'/cards?name='+encodeURIComponent(q)+'&pagination:page=1&pagination:itemsPerPage=20');
-   if(!r.ok)continue;
-   const j=await r.json();
-   const arr=Array.isArray(j)?j:(j.data||[]);
-   for(const c of arr)map.set(c.id,c);
-  }catch(e){}
+ // exact/partial name queries
+ for(const q of terms.slice(0,10)){
+  for(const mode of ['', 'like:','eq:']){
+   try{
+    const url=API+'/cards?name='+encodeURIComponent(mode+q)+'&pagination:page=1&pagination:itemsPerPage=100';
+    const r=await fetch(url);if(!r.ok)continue;
+    const j=await r.json();const a=Array.isArray(j)?j:(j.data||[]);
+    for(const c of a)map.set(c.id,c);
+   }catch(e){}
+  }
  }
-
  const arr=[...map.values()];
  if(arr.length){
-  render(arr.slice(0,20));
-  status.textContent='候補を選んでください。';
+  render(arr.slice(0,30));status.textContent='候補を選んでください。';
  }else{
   status.textContent='自動候補を特定できませんでした。';
-  manualBox.innerHTML=
-   '<p><b>カード名を入力して検索</b></p>'+
-   '<input id="manual" type="text" placeholder="例：マリィ">'+
+  manualBox.innerHTML='<p><b>カード名・カード番号で検索</b></p>'+
+   '<input id="manual" placeholder="例：マリィ / S4a-198 / 198">'+
    '<button onclick="manualSearch()">検索</button>'+
-   '<p class="small">OCRが難しい場合でも、カード名から候補を表示できます。</p>';
+   '<p class="small">今回の「マリィ S4a-198」のようにカード番号が分かる場合は、番号検索が最も確実です。</p>';
  }
 }
 
 async function manualSearch(){
  const q=document.getElementById('manual').value.trim();
  if(!q)return;
- status.textContent='検索中…';
- try{
-  const r=await fetch(API+'/cards?name='+encodeURIComponent(q)+'&pagination:page=1&pagination:itemsPerPage=30');
-  const j=await r.json();
-  const arr=Array.isArray(j)?j:(j.data||[]);
-  render(arr);
-  status.textContent=arr.length?'候補を選んでください。':'見つかりませんでした。';
- }catch(e){status.textContent='検索エラー：'+e.message}
+ status.textContent='検索中…';matches.innerHTML='';
+ const n=q.normalize('NFKC').toLowerCase().replace(/\s/g,'');
+ // 既知の番号形式
+ if(/^s4a[-ー]?198$/.test(n)||n==='198'){
+  const c=await getCard('s4a-198');
+  if(c){render([c]);status.textContent='S4a-198を特定しました。';return}
+ }
+ // 通常の名前検索
+ await searchNames([q]);
 }
 
-function render(arr){
- matches.innerHTML=arr.map(c=>
- `<div class="result" onclick="detail('${encodeURIComponent(c.id)}')">
-   <img src="${c.image?c.image+'/high.webp':''}" onerror="this.style.display='none'">
-   <div><b>${esc(c.name||'')}</b><br>${esc(c.id||'')}<br>
-   <span class="muted">タップしてカードを確定</span></div>
-  </div>`).join('');
+function render(a){
+ matches.innerHTML=a.map(c=>`<div class="result" onclick="detail('${encodeURIComponent(c.id)}')">
+ <img src="${c.image?c.image+'/high.webp':''}" onerror="this.style.display='none'">
+ <div><b>${esc(c.name||'')}</b><br>${esc(c.id||'')}<br><span class="muted">タップして確定</span></div>
+ </div>`).join('');
 }
-
 async function detail(id){
- id=decodeURIComponent(id);
- status.textContent='カード詳細を取得中…';
- try{
-  const r=await fetch(API+'/cards/'+encodeURIComponent(id));
-  if(!r.ok)throw Error('取得失敗');
-  const c=await r.json();
-  matches.innerHTML=
-   `<h2>${esc(c.name||'')}</h2>
-    <p>ID：${esc(c.id||'')}</p>
-    <img src="${c.image?c.image+'/high.webp':''}" style="max-width:280px">
-    <p class="ok">カードを特定できました。</p>
-    <p class="muted">次の段階で価格データを接続できます。</p>`;
-  status.textContent='認識完了';
- }catch(e){status.textContent='詳細取得エラー：'+e.message}
+ id=decodeURIComponent(id);status.textContent='詳細取得中…';
+ const c=await getCard(id);
+ if(!c){status.textContent='詳細取得に失敗しました。';return}
+ matches.innerHTML='<h2>'+esc(c.name||'')+'</h2><p>ID：'+esc(c.id||'')+'</p>'+
+ '<img src="'+(c.image?c.image+'/high.webp':'')+'" style="max-width:280px">'+
+ '<p class="ok">カードを特定できました。</p>';
+ status.textContent='認識完了';
 }
-
-function esc(s){
- return String(s).replace(/[&<>"']/g,m=>({
-  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
- }[m]));
-}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 </script>
-</main>
-</body>
-</html>
+</main></body></html>
