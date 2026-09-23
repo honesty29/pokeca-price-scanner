@@ -5,118 +5,152 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>ポケカ相場スキャナー Prototype</title>
+<title>ポケカ相場スキャナー V3</title>
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--text:#15171a;--muted:#70757d;--line:#e5e7eb;--accent:#111827;--up:#0a8f5a;--down:#d63c3c}
+:root{--bg:#f4f5f7;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--dark:#111827;--ok:#087f5b;--warn:#b45309}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
-header{padding:calc(env(safe-area-inset-top) + 18px) 18px 16px;background:#111827;color:#fff}
+header{background:var(--dark);color:white;padding:calc(env(safe-area-inset-top) + 18px) 18px 16px}
 h1{font-size:22px;margin:0 0 4px}.sub{font-size:12px;opacity:.75}
-main{max-width:720px;margin:auto;padding:16px 14px 40px}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
-.camera{display:block;width:100%;padding:18px;border-radius:15px;background:#111827;color:white;text-align:center;font-weight:700;border:0;font-size:16px}
-input[type=file]{display:none}.preview{display:none;width:100%;max-height:360px;object-fit:contain;border-radius:14px;margin-top:12px;background:#111}
-.searchrow{display:flex;gap:8px}.searchrow input{flex:1;min-width:0;padding:13px;border:1px solid var(--line);border-radius:12px;font-size:16px}
-button{cursor:pointer}.searchbtn{padding:0 16px;border:0;border-radius:12px;background:#111827;color:#fff;font-weight:700}
-.status{font-size:13px;color:var(--muted);margin:10px 2px}.result{display:grid;grid-template-columns:105px 1fr;gap:14px}
-.cardimg{width:105px;border-radius:10px;background:#eee;aspect-ratio:0.69;object-fit:cover}
-.name{font-size:19px;font-weight:800;margin:0 0 4px}.meta{font-size:12px;color:var(--muted);line-height:1.55}
-.price{font-size:30px;font-weight:900;margin:10px 0 2px}.source{font-size:11px;color:var(--muted)}
-.badge{display:inline-block;padding:4px 7px;border-radius:7px;background:#eef2ff;font-size:11px;margin:3px 3px 0 0}
-.list{margin-top:12px}.item{padding:12px 4px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center}.thumb{width:46px;height:64px;object-fit:cover;border-radius:6px;background:#eee}.itemmain{flex:1}.itemname{font-weight:700;font-size:14px}.itemmeta{font-size:11px;color:var(--muted)}.itemprice{font-weight:800}
-.small{font-size:11px;color:var(--muted);line-height:1.5}
-footer{padding:0 4px 20px;color:var(--muted);font-size:11px;line-height:1.5}
+main{max-width:720px;margin:auto;padding:14px 14px 44px}.panel{background:white;border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 2px 10px #00000009}
+.camera{display:block;text-align:center;background:var(--dark);color:#fff;border-radius:15px;padding:17px;font-weight:800;font-size:16px}
+input[type=file]{display:none}.preview{width:100%;max-height:390px;object-fit:contain;background:#111;border-radius:14px;margin-top:12px;display:none}
+button{font:inherit}.row{display:flex;gap:8px}.row input{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px}.btn{border:0;border-radius:12px;background:var(--dark);color:white;padding:0 15px;font-weight:800}
+.key input{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:14px}.key .btn{padding:12px;width:100%;margin-top:8px}
+.status{font-size:13px;color:var(--muted);line-height:1.5;margin:10px 2px}.hidden{display:none}
+.candidate{display:flex;gap:10px;padding:10px 4px;border-top:1px solid var(--line);align-items:center}.candidate img{width:55px;height:77px;object-fit:cover;border-radius:7px;background:#eee}.candidate .mid{flex:1}.name{font-weight:800}.meta{font-size:11px;color:var(--muted);margin-top:3px}.score{font-weight:800;font-size:12px}
+.result{display:grid;grid-template-columns:115px 1fr;gap:15px}.cardimg{width:115px;border-radius:10px;background:#eee}.title{font-size:20px;font-weight:900}.price{font-size:30px;font-weight:900;margin:10px 0 2px}.badge{display:inline-block;font-size:11px;padding:4px 7px;border-radius:7px;background:#eef2ff;margin:3px 3px 0 0}.small{font-size:11px;color:var(--muted);line-height:1.55}
 </style>
 </head>
 <body>
-<header>
-  <h1>ポケカ相場スキャナー</h1>
-  <div class="sub">iPhone向けプロトタイプ / カメラ → カード検索 → 相場表示</div>
-</header>
+<header><h1>ポケカ相場スキャナー V3</h1><div class="sub">画像そのものを照合するカード認識プロトタイプ</div></header>
 <main>
-  <section class="panel">
-    <label class="camera" for="camera">📷 カードを撮影する</label>
-    <input id="camera" type="file" accept="image/*" capture="environment">
-    <img id="preview" class="preview" alt="撮影したカード">
-    <div class="small" style="margin-top:10px">現在の試作版では、撮影画像を確認したあとカード名を入力して照合します。次の段階で画像認識を追加できます。</div>
-  </section>
+<section class="panel">
+  <label class="camera" for="camera">📷 カードを撮影・選択</label>
+  <input id="camera" type="file" accept="image/*" capture="environment">
+  <img id="preview" class="preview" alt="撮影画像">
+  <div id="status" class="status">カードを撮影すると、画像認識APIでカード画像そのものを照合します。</div>
+</section>
 
-  <section class="panel">
-    <div class="searchrow">
-      <input id="q" placeholder="カード名を入力（例：ピカチュウ）" autocomplete="off">
-      <button class="searchbtn" id="search">検索</button>
-    </div>
-    <div id="status" class="status">価格データを読み込みます…</div>
-    <div id="results" class="list"></div>
-  </section>
+<section class="panel key">
+  <div style="font-weight:800;margin-bottom:7px">🔑 Vision APIキー</div>
+  <input id="key" type="password" placeholder="APIキーを入力（端末内だけで保持）" autocomplete="off">
+  <button class="btn" id="saveKey">この端末に保存</button>
+  <div class="small" style="margin-top:8px">キーはこのブラウザのlocalStorageに保存します。GitHub Pages等にコードを公開する場合、キーをHTMLへ直接書き込まないでください。</div>
+</section>
 
-  <section id="detail" class="panel" style="display:none"></section>
+<section class="panel">
+  <div class="row"><input id="q" placeholder="手動検索：カード名"><button class="btn" id="search">検索</button></div>
+  <div id="searchResults"></div>
+</section>
 
-  <footer>
-    価格データ：CardGap Public Prices Dataset（CC BY 4.0）。データは毎日更新される公開データを利用する設計です。価格は参考値で、実際の売買価格・買取額を保証しません。
-  </footer>
+<section id="detail" class="panel hidden"></section>
+
+<footer class="small">
+  認識：Pokémon TCG API Vision。写真からカードをカタログ画像と照合し、候補を返します。日本版は region=JP を指定します。画像だけで再録・同一アートの別印刷を完全判定できないため、候補確認を残しています。<br><br>
+  カード情報：TCGdex。価格表示は既存プロトタイプの公開価格データを利用する想定です。価格は参考値です。
+</footer>
 </main>
 <script>
+const API="https://api.pokemontcgapi.com/v1/vision/identify";
+const TCG="https://api.tcgdex.net/v2/ja";
 const DATA_URL="https://cardgap.jp/data/prices.json";
-let rows=[];
+let prices=[];
 const $=id=>document.getElementById(id);
-$("camera").addEventListener("change",e=>{
+$("key").value=localStorage.getItem("ptcg_key")||"";
+$("saveKey").onclick=()=>{localStorage.setItem("ptcg_key",$("key").value.trim());$("status").textContent="APIキーをこの端末に保存しました。";};
+
+$("camera").addEventListener("change", async e=>{
   const f=e.target.files?.[0]; if(!f)return;
   $("preview").src=URL.createObjectURL(f); $("preview").style.display="block";
-  $("status").textContent="写真を読み込みました。カード名を入力して検索してください。";
+  const key=$("key").value.trim();
+  if(!key){
+    $("status").innerHTML="🔑 Vision APIキーが未設定です。キーを入力してからもう一度撮影してください。<br>APIキーなしでも下の手動検索は利用できます。";
+    return;
+  }
+  await identify(f,key);
 });
-async function loadData(){
+
+async function identify(file,key){
+  $("status").textContent="🤖 カード画像そのものを照合中…";
+  const fd=new FormData();
+  fd.append("image",file);
+  fd.append("top_k","5");
+  fd.append("region","JP");
   try{
-    const r=await fetch(DATA_URL,{cache:"no-store"});
-    if(!r.ok) throw new Error("HTTP "+r.status);
+    const r=await fetch(API,{method:"POST",headers:{"X-Api-Key":key},body:fd});
     const j=await r.json();
-    rows=Array.isArray(j)?j:(j.rows||[]);
-    $("status").textContent=`価格データ ${rows.length.toLocaleString()}件を読み込みました。`;
-  }catch(e){
-    $("status").textContent="価格データの取得に失敗しました。通信状態またはデータ提供元を確認してください。";
+    if(!r.ok) throw new Error(j?.error?.message||("HTTP "+r.status));
+    renderVision(j);
+  }catch(err){
+    console.error(err);
+    $("status").innerHTML="認識に失敗しました。<br>"+esc(err.message||"unknown error");
   }
 }
-function yen(v){return v==null||v===""?"—":"¥"+Number(v).toLocaleString()}
-function getName(x){return x.name_ja||x.name||x.name_jp||""}
-function score(x,q){
-  const n=getName(x).toLowerCase(), s=(x.set_en||x.set||"").toLowerCase();
-  q=q.toLowerCase();
-  return n===q?100:(n.startsWith(q)?70:(n.includes(q)?50:(s.includes(q)?20:0)));
-}
-function search(){
-  const q=$("q").value.trim();
-  if(!q){$("results").innerHTML="";return}
-  const found=rows.map(x=>[score(x,q),x]).filter(a=>a[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,20).map(a=>a[1]);
-  $("results").innerHTML=found.length?found.map((x,i)=>`
-    <div class="item" data-i="${i}">
-      <img class="thumb" src="${x.image_url||""}" loading="lazy">
-      <div class="itemmain"><div class="itemname">${esc(getName(x)||"名称不明")}</div>
-      <div class="itemmeta">${esc(x.set_en||"")} ${esc(x.rarity||"")}</div></div>
-      <div class="itemprice">${yen(x.cardgap_median_jpy||x.price_jpy||x.price_mercari_jpy)}</div>
-    </div>`).join(""):`<div class="status">候補が見つかりませんでした。</div>`;
-  [...$("results").querySelectorAll(".item")].forEach((el,i)=>el.onclick=()=>show(found[i]));
-}
-function show(x){
-  $("detail").style.display="block";
-  const p=x.cardgap_median_jpy||x.price_jpy||x.price_mercari_jpy;
-  $("detail").innerHTML=`
-    <div class="result">
-      <img class="cardimg" src="${x.image_url||""}">
-      <div>
-        <div class="name">${esc(getName(x)||"名称不明")}</div>
-        <div class="meta">${esc(x.set_en||"")} / ${esc(x.rarity||"")}</div>
-        <div class="badge">公開データ</div>
-        ${x.price_mercari_jpy?`<div class="badge">Mercari ${yen(x.price_mercari_jpy)}</div>`:""}
-        ${x.price_yahoo_jpy?`<div class="badge">Yahoo ${yen(x.price_yahoo_jpy)}</div>`:""}
-        <div class="price">${yen(p)}</div>
-        <div class="source">CardGap median / 最新公開データ</div>
-      </div>
+
+function renderVision(j){
+  const candidates=j.candidates||j.matches||[];
+  const decision=j.decision||j.status||"";
+  $("status").textContent=decision==="ambiguous"?"候補が複数あります。カードをタップして確認してください。":"認識結果を取得しました。";
+  const html=candidates.map((c,i)=>{
+    const card=c.card||c;
+    const id=card.id||c.id||"";
+    const name=card.name||c.name||"";
+    const dist=c.distance??c.score??"";
+    return `<div class="candidate" data-id="${esc(id)}">
+      <img src="${esc(card.image||c.image||"")}" onerror="this.style.display='none'">
+      <div class="mid"><div class="name">${esc(name||"候補")}</div><div class="meta">ID: ${esc(id)} ${dist!==""?" / score: "+esc(dist):""}</div></div>
+      <div class="score">${i+1}</div>
     </div>`;
-  $("detail").scrollIntoView({behavior:"smooth",block:"start"});
+  }).join("");
+  $("detail").classList.remove("hidden");
+  $("detail").innerHTML=`<div style="font-weight:900;margin-bottom:5px">認識候補</div>${html||"<div class='status'>候補がありません。</div>"}<div class='small' style='margin-top:10px'>※画像だけで同一アートの再録を区別できない場合があるため、候補を表示します。</div>`;
+  [...$("detail").querySelectorAll(".candidate")].forEach((el,i)=>el.onclick=()=>loadCard(el.dataset.id));
 }
-function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-$("search").onclick=search;
-$("q").addEventListener("keydown",e=>{if(e.key==="Enter")search()});
-loadData();
+
+async function loadCard(id){
+  if(!id)return;
+  $("detail").innerHTML="<div class='status'>カード情報と価格を照合中…</div>";
+  try{
+    const r=await fetch(`${TCG}/cards/${encodeURIComponent(id)}`);
+    if(!r.ok) throw new Error("TCGdex card not found");
+    const c=await r.json();
+    const p=findPrice(c);
+    $("detail").innerHTML=`<div class="result">
+      <img class="cardimg" src="${esc(c.image?c.image+"/high.webp":"")}">
+      <div><div class="title">${esc(c.name||"")}</div>
+      <div class="meta">${esc(c.id||"")} / ${esc(c.localId||"")} / ${esc(c.rarity||"")}</div>
+      <span class="badge">🇯🇵 日本語DB</span><span class="badge">🖼️ 画像照合</span>
+      <div class="price">${p?"¥"+Number(p).toLocaleString():"—"}</div>
+      <div class="small">${p?"公開価格データの参考値":"価格データを一致できませんでした"}</div></div></div>
+      <div class="small" style="margin-top:12px">カードIDを確定した後に価格データを紐づける構成です。再録・プロモ等は価格データ側のID対応を今後強化できます。</div>`;
+  }catch(e){$("detail").innerHTML="<div class='status'>カード情報の取得に失敗しました。</div>"}
+}
+
+function findPrice(c){
+  const id=String(c.id||"").toLowerCase(), lid=String(c.localId||"");
+  const name=String(c.name||"");
+  const x=prices.find(r=>String(r.id||"").toLowerCase()===id)
+       ||prices.find(r=>String(r.localId||"")===lid && String(r.name_ja||r.name||"")===name)
+       ||prices.find(r=>String(r.localId||"")===lid && String(r.name_ja||r.name||"").includes(name));
+  return x?.cardgap_median_jpy||x?.price_jpy||x?.price_mercari_jpy||null;
+}
+
+async function loadPrices(){
+  try{const r=await fetch(DATA_URL,{cache:"no-store"}); if(!r.ok)return; const j=await r.json(); prices=Array.isArray(j)?j:(j.rows||[]);}catch(e){}
+}
+async function manualSearch(){
+  const q=$("q").value.trim(); if(!q)return;
+  $("searchResults").innerHTML="<div class='status'>検索中…</div>";
+  try{
+    const r=await fetch(`${TCG}/cards?name=${encodeURIComponent(q)}`);
+    const a=await r.json();
+    $("searchResults").innerHTML=(a||[]).slice(0,12).map(c=>`<div class="candidate" data-id="${esc(c.id)}"><img src="${esc(c.image?c.image+"/low.webp":"")}"><div class="mid"><div class="name">${esc(c.name)}</div><div class="meta">${esc(c.localId||"")} / ${esc(c.id)}</div></div></div>`).join("")||"<div class='status'>見つかりませんでした。</div>";
+    [...$("searchResults").querySelectorAll(".candidate")].forEach(el=>el.onclick=()=>loadCard(el.dataset.id));
+  }catch(e){$("searchResults").innerHTML="<div class='status'>検索に失敗しました。</div>"}
+}
+$("search").onclick=manualSearch;$("q").addEventListener("keydown",e=>{if(e.key==="Enter")manualSearch()});
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+loadPrices();
 </script>
 </body>
 </html>
