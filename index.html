@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ポケカ相場スキャナー Prototype</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#15171a;--muted:#70757d;--line:#e5e7eb;--accent:#111827;--up:#0a8f5a;--down:#d63c3c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+header{padding:calc(env(safe-area-inset-top) + 18px) 18px 16px;background:#111827;color:#fff}
+h1{font-size:22px;margin:0 0 4px}.sub{font-size:12px;opacity:.75}
+main{max-width:720px;margin:auto;padding:16px 14px 40px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.camera{display:block;width:100%;padding:18px;border-radius:15px;background:#111827;color:white;text-align:center;font-weight:700;border:0;font-size:16px}
+input[type=file]{display:none}.preview{display:none;width:100%;max-height:360px;object-fit:contain;border-radius:14px;margin-top:12px;background:#111}
+.searchrow{display:flex;gap:8px}.searchrow input{flex:1;min-width:0;padding:13px;border:1px solid var(--line);border-radius:12px;font-size:16px}
+button{cursor:pointer}.searchbtn{padding:0 16px;border:0;border-radius:12px;background:#111827;color:#fff;font-weight:700}
+.status{font-size:13px;color:var(--muted);margin:10px 2px}.result{display:grid;grid-template-columns:105px 1fr;gap:14px}
+.cardimg{width:105px;border-radius:10px;background:#eee;aspect-ratio:0.69;object-fit:cover}
+.name{font-size:19px;font-weight:800;margin:0 0 4px}.meta{font-size:12px;color:var(--muted);line-height:1.55}
+.price{font-size:30px;font-weight:900;margin:10px 0 2px}.source{font-size:11px;color:var(--muted)}
+.badge{display:inline-block;padding:4px 7px;border-radius:7px;background:#eef2ff;font-size:11px;margin:3px 3px 0 0}
+.list{margin-top:12px}.item{padding:12px 4px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center}.thumb{width:46px;height:64px;object-fit:cover;border-radius:6px;background:#eee}.itemmain{flex:1}.itemname{font-weight:700;font-size:14px}.itemmeta{font-size:11px;color:var(--muted)}.itemprice{font-weight:800}
+.small{font-size:11px;color:var(--muted);line-height:1.5}
+footer{padding:0 4px 20px;color:var(--muted);font-size:11px;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <h1>ポケカ相場スキャナー</h1>
+  <div class="sub">iPhone向けプロトタイプ / カメラ → カード検索 → 相場表示</div>
+</header>
+<main>
+  <section class="panel">
+    <label class="camera" for="camera">📷 カードを撮影する</label>
+    <input id="camera" type="file" accept="image/*" capture="environment">
+    <img id="preview" class="preview" alt="撮影したカード">
+    <div class="small" style="margin-top:10px">現在の試作版では、撮影画像を確認したあとカード名を入力して照合します。次の段階で画像認識を追加できます。</div>
+  </section>
+
+  <section class="panel">
+    <div class="searchrow">
+      <input id="q" placeholder="カード名を入力（例：ピカチュウ）" autocomplete="off">
+      <button class="searchbtn" id="search">検索</button>
+    </div>
+    <div id="status" class="status">価格データを読み込みます…</div>
+    <div id="results" class="list"></div>
+  </section>
+
+  <section id="detail" class="panel" style="display:none"></section>
+
+  <footer>
+    価格データ：CardGap Public Prices Dataset（CC BY 4.0）。データは毎日更新される公開データを利用する設計です。価格は参考値で、実際の売買価格・買取額を保証しません。
+  </footer>
+</main>
+<script>
+const DATA_URL="https://cardgap.jp/data/prices.json";
+let rows=[];
+const $=id=>document.getElementById(id);
+$("camera").addEventListener("change",e=>{
+  const f=e.target.files?.[0]; if(!f)return;
+  $("preview").src=URL.createObjectURL(f); $("preview").style.display="block";
+  $("status").textContent="写真を読み込みました。カード名を入力して検索してください。";
+});
+async function loadData(){
+  try{
+    const r=await fetch(DATA_URL,{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    rows=Array.isArray(j)?j:(j.rows||[]);
+    $("status").textContent=`価格データ ${rows.length.toLocaleString()}件を読み込みました。`;
+  }catch(e){
+    $("status").textContent="価格データの取得に失敗しました。通信状態またはデータ提供元を確認してください。";
+  }
+}
+function yen(v){return v==null||v===""?"—":"¥"+Number(v).toLocaleString()}
+function getName(x){return x.name_ja||x.name||x.name_jp||""}
+function score(x,q){
+  const n=getName(x).toLowerCase(), s=(x.set_en||x.set||"").toLowerCase();
+  q=q.toLowerCase();
+  return n===q?100:(n.startsWith(q)?70:(n.includes(q)?50:(s.includes(q)?20:0)));
+}
+function search(){
+  const q=$("q").value.trim();
+  if(!q){$("results").innerHTML="";return}
+  const found=rows.map(x=>[score(x,q),x]).filter(a=>a[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,20).map(a=>a[1]);
+  $("results").innerHTML=found.length?found.map((x,i)=>`
+    <div class="item" data-i="${i}">
+      <img class="thumb" src="${x.image_url||""}" loading="lazy">
+      <div class="itemmain"><div class="itemname">${esc(getName(x)||"名称不明")}</div>
+      <div class="itemmeta">${esc(x.set_en||"")} ${esc(x.rarity||"")}</div></div>
+      <div class="itemprice">${yen(x.cardgap_median_jpy||x.price_jpy||x.price_mercari_jpy)}</div>
+    </div>`).join(""):`<div class="status">候補が見つかりませんでした。</div>`;
+  [...$("results").querySelectorAll(".item")].forEach((el,i)=>el.onclick=()=>show(found[i]));
+}
+function show(x){
+  $("detail").style.display="block";
+  const p=x.cardgap_median_jpy||x.price_jpy||x.price_mercari_jpy;
+  $("detail").innerHTML=`
+    <div class="result">
+      <img class="cardimg" src="${x.image_url||""}">
+      <div>
+        <div class="name">${esc(getName(x)||"名称不明")}</div>
+        <div class="meta">${esc(x.set_en||"")} / ${esc(x.rarity||"")}</div>
+        <div class="badge">公開データ</div>
+        ${x.price_mercari_jpy?`<div class="badge">Mercari ${yen(x.price_mercari_jpy)}</div>`:""}
+        ${x.price_yahoo_jpy?`<div class="badge">Yahoo ${yen(x.price_yahoo_jpy)}</div>`:""}
+        <div class="price">${yen(p)}</div>
+        <div class="source">CardGap median / 最新公開データ</div>
+      </div>
+    </div>`;
+  $("detail").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+$("search").onclick=search;
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter")search()});
+loadData();
+</script>
+</body>
+</html>
