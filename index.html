@@ -1,188 +1,370 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ポケカ相場スキャナー V9</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>ポケカ価格スキャナー V10</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f7;margin:0;color:#111}
-main{max-width:720px;margin:auto;padding:16px}.box{background:#fff;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px #0001}
-input{width:100%;box-sizing:border-box;padding:13px;font-size:17px;border:1px solid #ccc;border-radius:10px}
-button{background:#111827;color:#fff;border:0;border-radius:12px;padding:13px 18px;font-size:17px;margin-top:8px}
-img{max-width:100%;border-radius:12px}.muted{color:#666}.err{color:#b00020}.ok{color:#087f23}
-.result{display:flex;gap:12px;border-top:1px solid #ddd;padding:12px 0}.result img{width:90px;height:126px;object-fit:contain}
-.small{font-size:13px;color:#777}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#111827}
+header{background:#111827;color:#fff;padding:18px 16px 14px;position:sticky;top:0;z-index:5}
+h1{font-size:20px;margin:0 0 4px}header p{margin:0;font-size:12px;color:#cbd5e1}
+main{max-width:760px;margin:auto;padding:14px}
+.card{background:#fff;border-radius:16px;padding:14px;margin:0 0 12px;box-shadow:0 2px 12px #0000000b}
+h2{font-size:16px;margin:0 0 10px}.muted{font-size:12px;color:#64748b}.status{padding:10px;border-radius:10px;background:#eef2ff;font-size:13px;margin-top:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 150px}
+button,input{font:inherit}button{border:0;border-radius:11px;padding:12px 14px;background:#111827;color:#fff;font-weight:700}
+button.secondary{background:#e5e7eb;color:#111827}button:disabled{opacity:.45}
+input[type=text]{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
+input[type=file]{width:100%;padding:10px;border:1px dashed #94a3b8;border-radius:10px;background:#f8fafc}
+.preview{width:100%;max-height:480px;object-fit:contain;border-radius:12px;background:#0f172a;display:none}
+canvas{max-width:100%;border-radius:12px;background:#0f172a;display:none}
+.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#e2e8f0;font-size:11px;margin:2px}
+.candidate{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;border:1px solid #e2e8f0;border-radius:12px;padding:8px;margin-top:8px}
+.candidate img{width:72px;height:100px;object-fit:contain;background:#f8fafc;border-radius:7px}.candidate b{font-size:14px}.candidate small{display:block;color:#64748b;margin-top:3px}
+.price{font-size:22px;font-weight:800}.pricebox{background:#f8fafc;border-radius:12px;padding:12px;margin-top:10px}
+.warn{background:#fff7ed;color:#9a3412}.ok{background:#ecfdf5;color:#065f46}
+details summary{cursor:pointer;font-weight:700}
+#busy{display:none;position:fixed;inset:0;background:#0008;color:#fff;z-index:20;align-items:center;justify-content:center;text-align:center;padding:30px}
+.spinner{font-size:16px;background:#111827;padding:18px 22px;border-radius:14px}
+a{color:#2563eb}
+footer{font-size:11px;color:#64748b;text-align:center;padding:12px 0 30px}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
-<body><main>
-<h1>ポケカ相場スキャナー V9</h1>
-<div class="box">
-<p><b>無料OCR・カード番号対応版</b></p>
-<input id="file" type="file" accept="image/*" capture="environment">
-<img id="preview" hidden>
-</div>
-<div class="box">
-<div id="status" class="muted">カードを撮影してください。</div>
-<div id="ocr"></div>
-<div id="manualBox"></div>
-<div id="matches"></div>
-</div>
+<body>
+<header>
+  <h1>📷 ポケカ価格スキャナー V10</h1>
+  <p>カード全体の写真 → カード候補検索 → 画像の似ている順に確認 → 相場</p>
+</header>
 
+<main>
+<section class="card">
+  <h2>① カード全体を撮影</h2>
+  <input id="file" type="file" accept="image/*" capture="environment">
+  <img id="preview" class="preview" alt="撮影画像">
+  <canvas id="work"></canvas>
+  <div id="status" class="status">写真を選んでください。</div>
+</section>
+
+<section class="card">
+  <h2>② 認識を開始</h2>
+  <div class="row">
+    <button id="recognize">📷 写真から探す</button>
+    <button id="reset" class="secondary">リセット</button>
+  </div>
+  <p class="muted">V10は「カード全体の写真」を使います。背景が少し写っていてもOK。カードをできるだけ大きく、正面に近く撮ってください。</p>
+</section>
+
+<section class="card">
+  <h2>③ うまく見つからない場合</h2>
+  <div class="row">
+    <input id="manual" type="text" placeholder="カード名・セット番号（例：マリィ / S4a-198）">
+    <button id="manualSearch">手動検索</button>
+  </div>
+  <p class="muted">例：マリィ、リザードン、S4a-198、198 など</p>
+</section>
+
+<section class="card" id="resultCard" style="display:none">
+  <h2>④ 候補カード</h2>
+  <div id="results"></div>
+</section>
+
+<section class="card" id="priceCard" style="display:none">
+  <h2>⑤ 相場</h2>
+  <div id="selected"></div>
+</section>
+
+<section class="card">
+  <details>
+    <summary>V10の仕組み</summary>
+    <p class="muted">
+      ① 写真全体からカードらしい領域を推定・整形 → ② カード名/番号をOCR →
+      ③ TCGdexの日本語カード候補を取得 → ④ 候補画像と撮影画像の類似度を計算 →
+      ⑤ 候補をタップして確定 → ⑥ CardGapの公開価格データから相場を探します。
+    </p>
+    <p class="muted">画像認識は完全自動の1枚決め打ちではなく、候補を出して人が確認する方式です。再録・別版は画像だけでは区別できない場合があります。</p>
+  </details>
+</section>
+
+<footer>
+  TCGdexのカード情報・画像を利用しています。価格データはCardGap公開データを利用します。
+</footer>
+</main>
+
+<div id="busy"><div class="spinner">処理中…<br><span id="busyText">少し待ってください</span></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://docs.opencv.org/4.x/opencv.js"></script>
 <script>
 const API='https://api.tcgdex.net/v2/ja';
-const file=document.getElementById('file'),preview=document.getElementById('preview');
-const status=document.getElementById('status'),ocr=document.getElementById('ocr');
-const manualBox=document.getElementById('manualBox'),matches=document.getElementById('matches');
+const PRICE_URL='https://cardgap.jp/data/prices.json';
+let photoFile=null, photoImage=null, warpedDataUrl=null, lastCandidates=[];
 
-file.onchange=async()=>{
- const f=file.files[0];if(!f)return;
- preview.src=URL.createObjectURL(f);preview.hidden=false;
- ocr.innerHTML='';manualBox.innerHTML='';matches.innerHTML='';
- try{
-  const img=await load(preview);
-  status.textContent='カードを調整しています…';
-  const card=extractCard(img);
-  const crops=makeCrops(card);
+const $=id=>document.getElementById(id);
+const setStatus=(msg,kind='')=>{ $('status').textContent=msg; $('status').className='status '+kind; };
+const busy=(on,msg='少し待ってください')=>{ $('busy').style.display=on?'flex':'none'; $('busyText').textContent=msg; };
 
-  const worker=await Tesseract.createWorker('jpn',1,{
-   langPath:'https://tessdata.projectnaptha.com/4.0.0',
-   logger:m=>{if(m.status==='recognizing text')status.textContent='OCR中… '+Math.round((m.progress||0)*100)+'%'}
+$('file').addEventListener('change',e=>{
+  photoFile=e.target.files?.[0]||null;
+  if(!photoFile)return;
+  const url=URL.createObjectURL(photoFile);
+  $('preview').src=url; $('preview').style.display='block';
+  setStatus('写真を読み込みました。「写真から探す」を押してください。','ok');
+});
+
+$('reset').onclick=()=>location.reload();
+
+function loadImage(fileOrUrl){
+  return new Promise((resolve,reject)=>{
+    const im=new Image();
+    im.crossOrigin='anonymous';
+    im.onload=()=>resolve(im);
+    im.onerror=reject;
+    im.src=typeof fileOrUrl==='string'?fileOrUrl:URL.createObjectURL(fileOrUrl);
   });
-  await worker.setParameters({tessedit_pageseg_mode:'6',user_defined_dpi:'300'});
-  let texts=[];
-  for(const c of crops){
-   const r=await worker.recognize(c);
-   const t=(r.data.text||'').replace(/\s+/g,' ').trim();
-   if(t)texts.push(t);
+}
+
+function matToDataUrl(mat){
+  const canvas=document.createElement('canvas');
+  canvas.width=mat.cols; canvas.height=mat.rows;
+  cv.imshow(canvas,mat);
+  return canvas.toDataURL('image/jpeg',0.88);
+}
+
+/* Card localization: contour/rectangle detection. If it fails, use the full image. */
+async function rectify(file){
+  const img=await loadImage(file);
+  const maxW=1100, scale=Math.min(1,maxW/img.naturalWidth);
+  const c=document.createElement('canvas');
+  c.width=Math.round(img.naturalWidth*scale); c.height=Math.round(img.naturalHeight*scale);
+  const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,c.width,c.height);
+  $('work').style.display='block'; $('work').width=c.width; $('work').height=c.height;
+  $('work').getContext('2d').drawImage(img,0,0,c.width,c.height);
+  if(typeof cv==='undefined' || !cv.Mat) return c.toDataURL('image/jpeg',0.9);
+  let src=cv.imread(c), gray=new cv.Mat(), blur=new cv.Mat(), edge=new cv.Mat(), contours=new cv.MatVector(), hier=new cv.Mat();
+  cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY); cv.GaussianBlur(gray,blur,new cv.Size(5,5),0);
+  cv.Canny(blur,edge,60,160); cv.findContours(edge,contours,hier,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+  let best=null,bestArea=0;
+  for(let i=0;i<contours.size();i++){
+    const cnt=contours.get(i), peri=cv.arcLength(cnt,true), approx=new cv.Mat();
+    cv.approxPolyDP(cnt,approx,0.025*peri,true);
+    const area=Math.abs(cv.contourArea(approx));
+    if(approx.rows===4 && area>c.width*c.height*0.12 && area>bestArea){
+      const rect=cv.boundingRect(approx);
+      const ratio=rect.width/rect.height;
+      if(ratio>0.55 && ratio<0.85){best=approx.clone();bestArea=area;}
+    }
+    cnt.delete(); approx.delete();
   }
+  let out;
+  if(best){
+    const pts=[]; for(let i=0;i<4;i++)pts.push([best.intAt(i,0),best.intAt(i,1)]);
+    pts.sort((a,b)=>a[1]-b[1]);
+    const top=pts.slice(0,2).sort((a,b)=>a[0]-b[0]), bot=pts.slice(2).sort((a,b)=>a[0]-b[0]);
+    const ordered=[top[0],top[1],bot[1],bot[0]];
+    const w=744,h=1039;
+    const srcTri=cv.matFromArray(4,1,cv.CV_32FC2,ordered.flat());
+    const dstTri=cv.matFromArray(4,1,cv.CV_32FC2,[0,0,w,0,w,h,0,h]);
+    const M=cv.getPerspectiveTransform(srcTri,dstTri);
+    let dst=new cv.Mat(); cv.warpPerspective(src,dst,M,new cv.Size(w,h),cv.INTER_LINEAR,cv.BORDER_CONSTANT,new cv.Scalar());
+    out=matToDataUrl(dst);
+    dst.delete();M.delete();srcTri.delete();dstTri.delete();best.delete();
+  } else {
+    out=c.toDataURL('image/jpeg',0.9);
+  }
+  src.delete();gray.delete();blur.delete();edge.delete();contours.delete();hier.delete();
+  return out;
+}
+
+/* OCR: run Japanese+English once, then extract likely card name/number tokens. */
+async function ocr(dataUrl){
+  if(!window.Tesseract) return {text:'',name:'',number:''};
+  const worker=await Tesseract.createWorker('jpn+eng');
+  const r=await worker.recognize(dataUrl);
+  const text=r.data.text||'';
   await worker.terminate();
+  const normalized=text.replace(/\s+/g,' ').trim();
+  const nums=[...normalized.matchAll(/(?:[A-Z]{0,4}\s*)?(\d{1,3})\s*(?:\/\s*\d{1,3})?/gi)].map(m=>m[0].trim()).filter(Boolean);
+  let number=nums.find(x=>/\//.test(x))||nums.find(x=>/\d/.test(x))||'';
+  // Common Japanese card-name area words often survive OCR better after cleanup.
+  const lines=text.split(/\n/).map(x=>x.trim()).filter(x=>x.length>=2);
+  let name=lines.slice(0,8).sort((a,b)=>a.length-b.length)[0]||'';
+  if(name.length>20) name='';
+  return {text:normalized,name,number};
+}
 
-  const unique=[...new Set(texts)];
-  ocr.innerHTML='<b>OCR結果</b><br>'+unique.map(esc).join('<br>')+'<hr>';
-  status.textContent='カード情報を照合中…';
+async function tcgdex(url){
+  const r=await fetch(url); if(!r.ok) throw new Error('TCGdex '+r.status);
+  return await r.json();
+}
 
-  // OCRからセット番号・カード番号を探す
-  const joined=unique.join(' ');
-  const nums=findCardNumbers(joined);
-
-  // 例: S4a-198 / 198/190 を優先して直接照合
-  let direct=null;
-  if(nums.some(n=>n==='s4a-198'||n==='198')){
-    direct=await getCard('s4a-198');
-  }
-  if(direct){
-    render([direct]);
-    status.textContent='カード番号から候補を特定しました。';
+async function findCandidates(query){
+  const q=query.trim();
+  const urls=[];
+  const m=q.match(/^([a-zA-Z0-9]+)\s*[-_ ]\s*(\d{1,3})$/);
+  if(m){
+    const set=m[1].toLowerCase(), num=m[2];
+    urls.push(`${API}/sets/${encodeURIComponent(set)}`);
+    urls.push(`${API}/cards?localId=${encodeURIComponent(num)}`);
   }else{
-    await searchNames(unique);
+    urls.push(`${API}/cards?name=${encodeURIComponent(q)}`);
+    if(/^\d{1,3}$/.test(q)) urls.push(`${API}/cards?localId=${encodeURIComponent(q)}`);
   }
- }catch(e){status.textContent='エラー：'+e.message;status.className='err'}
+  const all=[];
+  for(const u of urls){
+    try{
+      const data=await tcgdex(u);
+      if(Array.isArray(data)) all.push(...data);
+      else if(data?.cards) all.push(...data.cards);
+    }catch(e){}
+  }
+  // For set-number, keep only the requested number.
+  if(m){
+    const num=m[2]; return dedupe(all.filter(x=>String(x.localId)===num));
+  }
+  return dedupe(all).slice(0,40);
+}
+function dedupe(a){const m=new Map();for(const x of a){if(x?.id)m.set(x.id,x)}return [...m.values()];}
+
+function cardImageUrl(c){
+  if(!c.image)return '';
+  return c.image.endsWith('/')?c.image+'high.jpg':c.image+'/high.jpg';
+}
+
+/* Simple image signature: resize to 32x44, grayscale + edge-weighted pixels.
+   This is intentionally used only to rank the already-retrieved candidates. */
+async function signature(dataUrl){
+  const im=await loadImage(dataUrl);
+  const c=document.createElement('canvas'); c.width=32;c.height=44;
+  const ctx=c.getContext('2d'); ctx.drawImage(im,0,0,32,44);
+  const d=ctx.getImageData(0,0,32,44).data, arr=[];
+  for(let i=0;i<d.length;i+=4){
+    arr.push((0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])/255);
+  }
+  return arr;
+}
+function distance(a,b){
+  let s=0,n=Math.min(a.length,b.length);
+  for(let i=0;i<n;i++)s+=Math.abs(a[i]-b[i]);
+  return s/n;
+}
+async function rankByImage(candidates,photo){
+  let ps; try{ps=await signature(photo)}catch(e){return candidates.map(c=>({...c,sim:null}));}
+  const out=[];
+  for(const c of candidates.slice(0,20)){
+    try{
+      const u=cardImageUrl(c); if(!u) throw 0;
+      const cs=await signature(u);
+      out.push({...c,sim:distance(ps,cs)});
+    }catch(e){out.push({...c,sim:null});}
+  }
+  return out.sort((a,b)=>(a.sim??9)-(b.sim??9));
+}
+
+function renderCandidates(cards,ocrInfo=''){
+  lastCandidates=cards;
+  $('resultCard').style.display='block';
+  const box=$('results'); box.innerHTML='';
+  if(!cards.length){
+    box.innerHTML='<div class="status warn">候補が見つかりませんでした。カード名か「S4a-198」のような番号を入力して手動検索してください。</div>';
+    return;
+  }
+  if(ocrInfo) box.insertAdjacentHTML('beforeend',`<div class="muted">OCR: ${escapeHtml(ocrInfo)}</div>`);
+  cards.slice(0,12).forEach((c,i)=>{
+    const el=document.createElement('div'); el.className='candidate';
+    const img=cardImageUrl(c);
+    el.innerHTML=`<img src="${img}" onerror="this.style.display='none'">
+      <div><b>${escapeHtml(c.name||'名称不明')}</b><small>${escapeHtml(c.id||'')} / ${escapeHtml(c.localId||'')}</small>
+      ${c.sim!=null?`<span class="pill">画像類似 ${Math.round((1-c.sim)*100)}%</span>`:''}</div>
+      <button data-i="${i}">選択</button>`;
+    el.querySelector('button').onclick=()=>selectCard(c);
+    box.appendChild(el);
+  });
+}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+async function selectCard(c){
+  $('priceCard').style.display='block';
+  $('selected').innerHTML=`<div><b>${escapeHtml(c.name||'')}</b><br><span class="muted">${escapeHtml(c.id||'')} / ${escapeHtml(c.localId||'')}</span></div><div class="pricebox">価格データを検索中…</div>`;
+  let detail=c;
+  try{detail=await tcgdex(`${API}/cards/${encodeURIComponent(c.id)}`)}catch(e){}
+  const price=await findPrice(detail);
+  $('selected').innerHTML=`<div><b>${escapeHtml(detail.name||c.name||'')}</b><br><span class="muted">${escapeHtml(detail.id||c.id||'')} / ${escapeHtml(detail.localId||c.localId||'')}</span></div>
+  ${detail.image?`<img src="${cardImageUrl(detail)}" style="width:150px;max-height:210px;object-fit:contain;display:block;margin:10px auto">`:''}
+  <div class="pricebox">${price.html}</div>`;
+  $('priceCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function findPrice(card){
+  try{
+    const r=await fetch(PRICE_URL,{cache:'no-store'});
+    if(!r.ok) throw 0;
+    const data=await r.json();
+    const rows=Array.isArray(data)?data:(data.cards||data.prices||[]);
+    const name=String(card.name||'').trim();
+    const local=String(card.localId||'').trim();
+    const id=String(card.id||'').toLowerCase();
+    const hits=rows.filter(x=>{
+      const xn=String(x.name_ja||x.name||'').trim();
+      const xs=String(x.slug||x.id||'').toLowerCase();
+      return (name&&xn===name)||(local&&xs.includes(local)&&name&&xn.includes(name));
+    }).slice(0,5);
+    if(!hits.length) return {html:`<b>価格データが見つかりませんでした</b><p class="muted">CardGapの公開データは全カードを収録しているわけではありません。<br><a href="https://cardgap.jp/" target="_blank">CardGapでカード名を確認する</a></p>`};
+    const h=hits.map(x=>{
+      const p=x.cardgap_median_jpy??x.price_jpy??x.price_mercari_jpy??x.price_yahoo_jpy;
+      return `<div style="padding:7px 0;border-bottom:1px solid #e2e8f0"><b>${escapeHtml(x.name_ja||name)}</b><br>${p!=null?`<span class="price">¥${Number(p).toLocaleString()}</span>`:'価格なし'}<div class="muted">${escapeHtml(x.set_en||'')} ${escapeHtml(x.rarity||'')}</div></div>`;
+    }).join('');
+    return {html:h+`<p class="muted">価格データ：CardGap公開データ（更新日はデータ側に依存）</p>`};
+  }catch(e){
+    return {html:'<b>価格データを取得できませんでした</b><p class="muted">通信環境を確認して、もう一度お試しください。</p>'};
+  }
+}
+
+$('recognize').onclick=async()=>{
+  if(!photoFile){setStatus('先にカード全体の写真を選んでください。','warn');return}
+  busy(true,'カードの輪郭を探しています…');
+  try{
+    warpedDataUrl=await rectify(photoFile);
+    busy(true,'カードの文字を読み取っています…');
+    const o=await ocr(warpedDataUrl);
+    const guesses=[];
+    if(o.name) guesses.push(o.name);
+    // Search several useful OCR fragments rather than trusting one OCR answer.
+    const textParts=o.text.split(/\s+/).filter(x=>x.length>=2).slice(0,8);
+    for(const p of textParts) if(!guesses.includes(p)) guesses.push(p);
+    let cards=[];
+    for(const g of guesses.slice(0,5)){
+      const found=await findCandidates(g);
+      cards.push(...found);
+      if(cards.length>=20) break;
+    }
+    if(o.number){
+      const found=await findCandidates(o.number.replace(/\s/g,''));
+      cards.push(...found);
+    }
+    cards=dedupe(cards);
+    busy(true,'候補カードの画像と撮影画像を比較しています…');
+    if(cards.length) cards=await rankByImage(cards,warpedDataUrl);
+    renderCandidates(cards, o.text ? `名前候補「${o.name||'—'}」 / 番号候補「${o.number||'—'}」` : 'OCR結果なし');
+    setStatus(cards.length?`候補を${cards.length}枚見つけました。画像が近い順に表示しています。`:'候補が見つかりませんでした。','');
+  }catch(e){
+    console.error(e); setStatus('認識中にエラーが発生しました。手動検索を試してください。','warn');
+  }finally{busy(false)}
 };
 
-function load(el){return new Promise((r,j)=>{el.onload=()=>r(el);el.onerror=j})}
-
-function extractCard(img){
- const W=img.naturalWidth,H=img.naturalHeight;
- // 写真中央の縦長カードを切り出す
- let cw=W*.76,ch=cw/.70;
- if(ch>H*.92){ch=H*.92;cw=ch*.70}
- let x=(W-cw)/2,y=(H-ch)/2-H*.03;
- y=Math.max(0,y);
- const c=document.createElement('canvas');
- const scale=Math.min(2.5,1600/cw);
- c.width=Math.round(cw*scale);c.height=Math.round(ch*scale);
- c.getContext('2d').drawImage(img,x,y,cw,ch,0,0,c.width,c.height);
- return c;
-}
-
-function makeCrops(card){
- const W=card.width,H=card.height;
- // 上部のカード名 + 下部のカード番号を複数パターンで読む
- const specs=[
-  [0,.04,.70,.20],[.02,.07,.65,.20],[.03,.10,.60,.16],
-  [0,.84,.75,.16],[.15,.84,.75,.16],[.45,.84,.55,.16]
- ];
- return specs.map(s=>{
-  const [x,y,w,h]=s,c=document.createElement('canvas');
-  const sw=W*w,sh=H*h,scale=Math.min(6,2200/sw);
-  c.width=Math.max(800,Math.round(sw*scale));c.height=Math.max(220,Math.round(sh*scale));
-  const ctx=c.getContext('2d');ctx.drawImage(card,W*x,H*y,sw,sh,0,0,c.width,c.height);
-  return c;
- });
-}
-
-function findCardNumbers(s){
- const a=new Set();
- const x=s.normalize('NFKC').toLowerCase().replace(/\s/g,'');
- const m=x.match(/s4a[-ー]?(?:198|190)/);if(m)a.add('s4a-198');
- if(/198[\/／]190|198.*190/.test(x))a.add('198');
- return [...a];
-}
-
-async function getCard(id){
- try{
-  const r=await fetch(API+'/cards/'+encodeURIComponent(id));
-  if(!r.ok)return null;
-  return await r.json();
- }catch(e){return null}
-}
-
-async function searchNames(texts){
- const terms=[...new Set(texts.map(t=>t.normalize('NFKC').replace(/[|｜\s　]/g,'').trim()).filter(x=>x.length>=2))];
- const map=new Map();
-
- // exact/partial name queries
- for(const q of terms.slice(0,10)){
-  for(const mode of ['', 'like:','eq:']){
-   try{
-    const url=API+'/cards?name='+encodeURIComponent(mode+q)+'&pagination:page=1&pagination:itemsPerPage=100';
-    const r=await fetch(url);if(!r.ok)continue;
-    const j=await r.json();const a=Array.isArray(j)?j:(j.data||[]);
-    for(const c of a)map.set(c.id,c);
-   }catch(e){}
-  }
- }
- const arr=[...map.values()];
- if(arr.length){
-  render(arr.slice(0,30));status.textContent='候補を選んでください。';
- }else{
-  status.textContent='自動候補を特定できませんでした。';
-  manualBox.innerHTML='<p><b>カード名・カード番号で検索</b></p>'+
-   '<input id="manual" placeholder="例：マリィ / S4a-198 / 198">'+
-   '<button onclick="manualSearch()">検索</button>'+
-   '<p class="small">今回の「マリィ S4a-198」のようにカード番号が分かる場合は、番号検索が最も確実です。</p>';
- }
-}
-
-async function manualSearch(){
- const q=document.getElementById('manual').value.trim();
- if(!q)return;
- status.textContent='検索中…';matches.innerHTML='';
- const n=q.normalize('NFKC').toLowerCase().replace(/\s/g,'');
- // 既知の番号形式
- if(/^s4a[-ー]?198$/.test(n)||n==='198'){
-  const c=await getCard('s4a-198');
-  if(c){render([c]);status.textContent='S4a-198を特定しました。';return}
- }
- // 通常の名前検索
- await searchNames([q]);
-}
-
-function render(a){
- matches.innerHTML=a.map(c=>`<div class="result" onclick="detail('${encodeURIComponent(c.id)}')">
- <img src="${c.image?c.image+'/high.webp':''}" onerror="this.style.display='none'">
- <div><b>${esc(c.name||'')}</b><br>${esc(c.id||'')}<br><span class="muted">タップして確定</span></div>
- </div>`).join('');
-}
-async function detail(id){
- id=decodeURIComponent(id);status.textContent='詳細取得中…';
- const c=await getCard(id);
- if(!c){status.textContent='詳細取得に失敗しました。';return}
- matches.innerHTML='<h2>'+esc(c.name||'')+'</h2><p>ID：'+esc(c.id||'')+'</p>'+
- '<img src="'+(c.image?c.image+'/high.webp':'')+'" style="max-width:280px">'+
- '<p class="ok">カードを特定できました。</p>';
- status.textContent='認識完了';
-}
-function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+$('manualSearch').onclick=async()=>{
+  const q=$('manual').value.trim(); if(!q){setStatus('カード名か番号を入力してください。','warn');return}
+  busy(true,'TCGdexから候補を検索しています…');
+  try{
+    let cards=await findCandidates(q);
+    if(cards.length && warpedDataUrl){
+      busy(true,'候補画像と撮影画像を比較しています…');
+      cards=await rankByImage(cards,warpedDataUrl);
+    }
+    renderCandidates(cards,`手動検索「${q}」`);
+    setStatus(cards.length?`候補を${cards.length}枚見つけました。`:'候補が見つかりませんでした。','');
+  }catch(e){setStatus('検索に失敗しました。','warn')}
+  finally{busy(false)}
+};
 </script>
-</main></body></html>
+</body>
+</html>
