@@ -2,155 +2,112 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>ポケカ相場スキャナー V4</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ポケカ相場スキャナー V5</title>
 <style>
-:root{--bg:#f4f5f7;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--dark:#111827;--ok:#087f5b;--warn:#b45309}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
-header{background:var(--dark);color:white;padding:calc(env(safe-area-inset-top) + 18px) 18px 16px}h1{font-size:22px;margin:0 0 4px}.sub{font-size:12px;opacity:.75}
-main{max-width:720px;margin:auto;padding:14px 14px 44px}.panel{background:white;border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 2px 10px #00000009}
-.camera{display:block;text-align:center;background:var(--dark);color:#fff;border-radius:15px;padding:17px;font-weight:800;font-size:16px}input[type=file]{display:none}
-.preview{width:100%;max-height:430px;object-fit:contain;background:#111;border-radius:14px;margin-top:12px;display:none}
-button{font:inherit}.row{display:flex;gap:8px}.row input{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px}.btn{border:0;border-radius:12px;background:var(--dark);color:white;padding:0 15px;font-weight:800}
-.status{font-size:13px;color:var(--muted);line-height:1.55;margin:10px 2px}.hidden{display:none}.ocr{background:#f8fafc;border-radius:12px;padding:10px;font-size:13px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto}
-.candidate{display:flex;gap:10px;padding:10px 4px;border-top:1px solid var(--line);align-items:center}.candidate img{width:55px;height:77px;object-fit:cover;border-radius:7px;background:#eee}.candidate .mid{flex:1}.name{font-weight:800}.meta{font-size:11px;color:var(--muted);margin-top:3px}.score{font-weight:800;font-size:12px}
-.result{display:grid;grid-template-columns:115px 1fr;gap:15px}.cardimg{width:115px;border-radius:10px;background:#eee}.title{font-size:20px;font-weight:900}.price{font-size:30px;font-weight:900;margin:10px 0 2px}.badge{display:inline-block;font-size:11px;padding:4px 7px;border-radius:7px;background:#eef2ff;margin:3px 3px 0 0}.small{font-size:11px;color:var(--muted);line-height:1.55}.note{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:10px;font-size:12px;line-height:1.55}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;background:#f5f5f7;color:#222}
+main{max-width:680px;margin:auto;padding:18px}.box{background:#fff;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #0001}
+button{font-size:17px;padding:13px 18px;border:0;border-radius:12px;background:#111;color:#fff}
+input[type=file]{width:100%;font-size:16px} img{max-width:100%;border-radius:12px;margin-top:12px}
+.muted{color:#666}.ok{color:#087f23}.err{color:#b00020}.card{display:flex;gap:12px;border-top:1px solid #ddd;padding:12px 0}
+.card img{width:82px;height:115px;object-fit:contain;margin:0}.pill{display:inline-block;background:#eee;border-radius:999px;padding:4px 8px;margin:2px}
 </style>
-</head>
-<body>
-<header><h1>ポケカ相場スキャナー V4</h1><div class="sub">無料OCR → TCGdex検索 → 価格表示プロトタイプ</div></header>
-<main>
-<section class="panel">
-<label class="camera" for="camera">📷 カードを撮影・選択</label>
-<input id="camera" type="file" accept="image/*" capture="environment">
-<img id="preview" class="preview" alt="撮影画像">
-<div id="status" class="status">カードを撮影すると、このiPhone上のOCRでカード名・番号などを読み取ります。外部の画像認識APIキーは不要です。</div>
-</section>
-<section class="panel">
-<div style="font-weight:800;margin-bottom:7px">🔎 OCRで読み取った文字</div>
-<div id="ocrText" class="ocr">まだ撮影していません。</div>
-<div class="note" style="margin-top:10px">写真の反射・スリーブ・複数枚写り込みなどでOCRを間違えることがあります。その場合は下の手動検索を使えます。</div>
-</section>
-<section class="panel">
-<div class="row"><input id="q" placeholder="手動検索：カード名"><button class="btn" id="search">検索</button></div>
-<div id="searchResults"></div>
-</section>
-<section id="detail" class="panel hidden"></section>
-<footer class="small">
-認識：Tesseract.jsのブラウザOCRを使用します。日本語・英字を読み取り、読み取った候補名をTCGdexの日本語カードDBで検索します。<br><br>
-カード情報：TCGdex。価格表示は公開価格データを参考値として利用します。価格データの対応状況によっては価格が表示されない場合があります。
-</footer>
-</main>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body><main>
+<h1>ポケカ相場スキャナー V5</h1>
+<div class="box">
+<p><b>無料OCR版</b>：カード上部を自動で切り出して日本語OCRします。</p>
+<input id="file" type="file" accept="image/*" capture="environment">
+<img id="preview" hidden>
+</div>
+<div class="box">
+<div id="status" class="muted">カード写真を選択してください。</div>
+<pre id="ocr" style="white-space:pre-wrap"></pre>
+<div id="results"></div>
+</div>
 <script>
-const TCG="https://api.tcgdex.net/v2/ja";
-const DATA_URL="https://cardgap.jp/data/prices.json";
-let prices=[]; let worker=null; let ocrBusy=false;
-const $=id=>document.getElementById(id);
+const file=document.getElementById('file'), preview=document.getElementById('preview');
+const status=document.getElementById('status'), ocr=document.getElementById('ocr'), results=document.getElementById('results');
+const API='https://api.tcgdex.net/v2/ja';
 
-$("camera").addEventListener("change", async e=>{
-  const f=e.target.files?.[0]; if(!f)return;
-  $("preview").src=URL.createObjectURL(f); $("preview").style.display="block";
-  await runOCR(f);
-});
+file.onchange=async()=>{
+ const f=file.files[0]; if(!f)return;
+ preview.src=URL.createObjectURL(f); preview.hidden=false; results.innerHTML=''; ocr.textContent='';
+ status.textContent='画像を準備中…';
+ try{
+   const img=await loadImage(preview);
+   // 上部約32%を切り出し、2倍に拡大。カード名が上部にある日本版を想定。
+   const crop=prep(img);
+   status.textContent='カード名をOCR中…（初回は日本語データの読み込みに少し時間がかかります）';
+   const worker=await Tesseract.createWorker('jpn',1,{
+      langPath:'https://tessdata.projectnaptha.com/4.0.0',
+      logger:m=>{if(m.status==='recognizing text')status.textContent=`OCR中… ${Math.round((m.progress||0)*100)}%`}
+   });
+   await worker.setParameters({tessedit_pageseg_mode:'7'});
+   const r=await worker.recognize(crop);
+   await worker.terminate();
+   const text=(r.data.text||'').replace(/\s+/g,' ').trim();
+   ocr.textContent='OCR結果：'+(text||'（文字を読み取れませんでした）');
+   status.textContent='TCGdexで候補を検索中…';
+   const terms=makeTerms(text);
+   const found=await searchCandidates(terms);
+   render(found);
+   status.textContent=found.length?'候補を選んでください。':'候補が見つかりませんでした。カードを明るく撮り直して再試行してください。';
+ }catch(e){status.textContent='エラー：'+e.message;status.className='err'}
+};
 
-async function runOCR(file){
-  if(ocrBusy)return;
-  ocrBusy=true; $("detail").classList.add("hidden");
-  $("ocrText").textContent="OCR準備中… 初回だけ言語データの読み込みに時間がかかります。";
-  $("status").textContent="🔎 カードの文字を読み取っています…";
-  try{
-    if(!worker){
-      worker=await Tesseract.createWorker(["jpn","eng"],1,{logger:m=>{
-        if(m.status&&typeof m.progress==='number') $("status").textContent=`🔎 OCR準備中… ${m.status} ${Math.round(m.progress*100)}%`;
-      }});
-    }
-    const src=await preprocess(file);
-    const ret=await worker.recognize(src,{rotateAuto:true});
-    const text=(ret.data?.text||"").trim();
-    $("ocrText").textContent=text||"文字を読み取れませんでした。カードを1枚だけ、文字が見えるように撮影してください。";
-    if(!text){
-      $("status").textContent="文字を読み取れませんでした。下の手動検索も使えます。";
-      return;
-    }
-    const terms=makeTerms(text);
-    $("status").textContent=`OCR完了。候補名 ${terms.length} 件でカードDBを検索しています…`;
-    await searchByOCR(terms);
-  }catch(err){
-    console.error(err); $("status").innerHTML="OCRに失敗しました。<br>iPhoneの通信状態を確認して、もう一度撮影してください。";
-  }finally{ocrBusy=false;}
+function loadImage(el){return new Promise((res,rej)=>{el.onload=()=>res(el);el.onerror=rej})}
+function prep(img){
+ const c=document.createElement('canvas'), w=img.naturalWidth, h=img.naturalHeight;
+ const y=Math.floor(h*0.03), ch=Math.floor(h*0.30);
+ c.width=Math.min(1800,Math.floor(w*1.8)); c.height=Math.floor(ch*(c.width/w));
+ const x=c.getContext('2d'); x.drawImage(img,0,y,w,ch,0,0,c.width,c.height);
+ // 軽いコントラスト強調
+ const d=x.getImageData(0,0,c.width,c.height), p=d.data;
+ for(let i=0;i<p.length;i+=4){for(let k=0;k<3;k++)p[i+k]=Math.max(0,Math.min(255,(p[i+k]-128)*1.25+128))}
+ x.putImageData(d,0,0); return c;
 }
-
-async function preprocess(file){
-  const img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=URL.createObjectURL(file);});
-  const max=1800; const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
-  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.naturalWidth*scale)); c.height=Math.max(1,Math.round(img.naturalHeight*scale));
-  const x=c.getContext('2d'); x.drawImage(img,0,0,c.width,c.height);
-  const d=x.getImageData(0,0,c.width,c.height); for(let i=0;i<d.data.length;i+=4){
-    const g=0.299*d.data[i]+0.587*d.data[i+1]+0.114*d.data[i+2];
-    const v=Math.max(0,Math.min(255,(g-128)*1.35+128)); d.data[i]=d.data[i+1]=d.data[i+2]=v;
-  } x.putImageData(d,0,0); URL.revokeObjectURL(img.src); return c;
+function makeTerms(t){
+ let s=t.normalize('NFKC').replace(/[|｜]/g,'').trim();
+ const arr=[s];
+ // OCRで混ざりやすい記号を除いた候補
+ const clean=s.replace(/[^ぁ-んァ-ヶ一-龯A-Za-z0-9ー・]/g,' ');
+ if(clean&&clean!==s)arr.push(clean);
+ return [...new Set(arr.filter(x=>x.length>=2))];
 }
-
-function makeTerms(text){
-  const lines=text.split(/\n+/).map(s=>s.replace(/[^ぁ-んァ-ヶ一-龯ーA-Za-z0-9・'’ -]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
-  const out=[];
-  const push=s=>{s=s.trim(); if(s.length<2||s.length>24)return; if(/^(TRAINER|TRAINERS|POKEMON|ENERGY|BASIC|HP|Illustrator|©|\d+)$/.test(s))return; if(!out.includes(s))out.push(s);};
-  lines.forEach(push);
-  const jp=text.match(/[ぁ-んァ-ヶ一-龯ー]{2,12}/g)||[]; jp.forEach(push);
-  const en=text.match(/[A-Za-z][A-Za-z '’-]{2,20}/g)||[]; en.forEach(push);
-  return out.slice(0,8);
+async function searchCandidates(terms){
+ const out=new Map();
+ for(const q of terms.slice(0,2)){
+   try{
+    const u=API+'/cards?name='+encodeURIComponent(q)+'&pagination:page=1&pagination:itemsPerPage=12';
+    const r=await fetch(u); if(!r.ok)continue;
+    const j=await r.json();
+    (j.data||[]).forEach(c=>out.set(c.id,c));
+   }catch(e){}
+ }
+ return [...out.values()].slice(0,12);
 }
-
-async function searchByOCR(terms){
-  const seen=new Map();
-  for(const term of terms){
-    try{
-      const r=await fetch(`${TCG}/cards?name=${encodeURIComponent(term)}`); if(!r.ok)continue;
-      const a=await r.json(); for(const c of (a||[]).slice(0,10)) if(!seen.has(c.id))seen.set(c.id,c);
-      if(seen.size>=12)break;
-    }catch(e){}
-  }
-  const arr=[...seen.values()].slice(0,12);
-  renderCandidates(arr,"OCR検索候補");
-  $("status").textContent=arr.length?"候補を表示しました。カードをタップして価格を確認できます。":"OCR文字からカード候補を見つけられませんでした。下の手動検索を試してください。";
+function render(cards){
+ if(!cards.length){results.innerHTML='<p class="err">候補なし</p>';return}
+ results.innerHTML='<h3>候補（タップして詳細）</h3>'+cards.map(c=>`
+ <div class="card" onclick="detail('${encodeURIComponent(c.id)}')">
+   <img src="${c.image?c.image+'/high.webp':''}" onerror="this.style.display='none'">
+   <div><b>${esc(c.name||'')}</b><br><span class="pill">${esc(c.id||'')}</span><br><span class="muted">タップして価格確認</span></div>
+ </div>`).join('');
 }
-
-function renderCandidates(a,title){
-  $("detail").classList.remove("hidden");
-  $("detail").innerHTML=`<div style="font-weight:900;margin-bottom:5px">${esc(title)}</div>`+
-    (a.length?a.map((c,i)=>`<div class="candidate" data-id="${esc(c.id)}"><img src="${esc(c.image?c.image+'/low.webp':'')}" onerror="this.style.display='none'"><div class="mid"><div class="name">${esc(c.name||'候補')}</div><div class="meta">${esc(c.localId||'')} / ${esc(c.id||'')}</div></div><div class="score">${i+1}</div></div>`).join(""):"<div class='status'>候補がありません。</div>")+
-    `<div class='small' style='margin-top:10px'>※候補をタップするとTCGdexのカード情報と参考価格を表示します。</div>`;
-  [...$("detail").querySelectorAll(".candidate")].forEach(el=>el.onclick=()=>loadCard(el.dataset.id));
+async function detail(id){
+ id=decodeURIComponent(id); status.textContent='カード詳細を取得中…';
+ try{
+  const r=await fetch(API+'/cards/'+encodeURIComponent(id)); if(!r.ok)throw Error('TCGdex取得失敗');
+  const c=await r.json();
+  results.innerHTML=`<div class="box"><h2>${esc(c.name||'')}</h2>
+  <p>ID：${esc(c.id||'')}</p>
+  <img src="${c.image?c.image+'/high.webp':''}" style="max-width:240px">
+  <p class="muted">カード情報を取得しました。価格データは今後の版で連携します。</p></div>`;
+  status.textContent='認識完了';
+ }catch(e){status.textContent='詳細取得エラー：'+e.message}
 }
-
-async function loadCard(id){
-  if(!id)return; $("detail").innerHTML="<div class='status'>カード情報と価格を照合中…</div>";
-  try{
-    const r=await fetch(`${TCG}/cards/${encodeURIComponent(id)}`); if(!r.ok)throw new Error("TCGdex card not found");
-    const c=await r.json(); const p=findPrice(c);
-    $("detail").innerHTML=`<div class="result"><img class="cardimg" src="${esc(c.image?c.image+'/high.webp':'')}" onerror="this.style.visibility='hidden'"><div><div class="title">${esc(c.name||'')}</div><div class="meta">${esc(c.id||'')} / ${esc(c.localId||'')} / ${esc(c.rarity||'')}</div><span class="badge">🇯🇵 日本語DB</span><span class="badge">🔎 OCR検索</span><div class="price">${p?'¥'+Number(p).toLocaleString():'—'}</div><div class="small">${p?'公開価格データの参考値':'価格データを一致できませんでした'}</div></div></div><div class="small" style="margin-top:12px">OCRは文字から候補を探す方式なので、同名カードや再録カードが複数ある場合は正しいカードをタップして選んでください。</div>`;
-  }catch(e){$("detail").innerHTML="<div class='status'>カード情報の取得に失敗しました。</div>";}
-}
-
-function findPrice(c){
-  const id=String(c.id||'').toLowerCase(), lid=String(c.localId||''), name=String(c.name||'');
-  const x=prices.find(r=>String(r.id||'').toLowerCase()===id)||prices.find(r=>String(r.localId||'')===lid&&String(r.name_ja||r.name||'')===name)||prices.find(r=>String(r.localId||'')===lid&&String(r.name_ja||r.name||'').includes(name));
-  return x?.cardgap_median_jpy||x?.price_jpy||x?.price_mercari_jpy||null;
-}
-
-async function loadPrices(){try{const r=await fetch(DATA_URL,{cache:'no-store'});if(!r.ok)return;const j=await r.json();prices=Array.isArray(j)?j:(j.rows||[]);}catch(e){}}
-
-async function manualSearch(){
-  const q=$("q").value.trim();if(!q)return;$("searchResults").innerHTML="<div class='status'>検索中…</div>";
-  try{const r=await fetch(`${TCG}/cards?name=${encodeURIComponent(q)}`);const a=await r.json();renderSearch(a||[]);}catch(e){$("searchResults").innerHTML="<div class='status'>検索に失敗しました。</div>";}
-}
-function renderSearch(a){$("searchResults").innerHTML=(a||[]).slice(0,12).map(c=>`<div class="candidate" data-id="${esc(c.id)}"><img src="${esc(c.image?c.image+'/low.webp':'')}" onerror="this.style.display='none'"><div class="mid"><div class="name">${esc(c.name)}</div><div class="meta">${esc(c.localId||'')} / ${esc(c.id)}</div></div></div>`).join("")||"<div class='status'>見つかりませんでした。</div>";[...$("searchResults").querySelectorAll(".candidate")].forEach(el=>el.onclick=()=>loadCard(el.dataset.id));}
-$("search").onclick=manualSearch;$("q").addEventListener("keydown",e=>{if(e.key==='Enter')manualSearch()});
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
-loadPrices();
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 </script>
-</body>
-</html>
+</main></body></html>
