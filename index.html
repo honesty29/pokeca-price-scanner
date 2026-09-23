@@ -1,134 +1,182 @@
 <!doctype html>
-<html lang="ja"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ポケカ相場スキャナー V6</title>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ポケカ相場スキャナー V7</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f7;margin:0;color:#222}
-main{max-width:700px;margin:auto;padding:16px}.box{background:#fff;padding:16px;border-radius:16px;margin:12px 0;box-shadow:0 2px 10px #0001}
-button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;background:#111;color:#fff;margin:4px}
-input{font-size:17px;padding:12px;width:100%;box-sizing:border-box;border:1px solid #ccc;border-radius:10px}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f7;margin:0;color:#151515}
+main{max-width:720px;margin:auto;padding:16px}.box{background:#fff;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px #0001}
+button{background:#111827;color:white;border:0;border-radius:12px;padding:13px 18px;font-size:17px}
+input[type=file],input[type=text]{font-size:17px;padding:12px;border:1px solid #ccc;border-radius:10px;box-sizing:border-box;width:100%}
 img{max-width:100%;border-radius:12px}.muted{color:#666}.err{color:#b00020}.ok{color:#087f23}
-.result{display:flex;gap:12px;padding:12px 0;border-top:1px solid #ddd}.result img{width:90px;height:126px;object-fit:contain}
+.result{display:flex;gap:12px;border-top:1px solid #ddd;padding:12px 0}.result img{width:90px;height:126px;object-fit:contain}
+.small{font-size:13px;color:#777}
+canvas{max-width:100%;border-radius:10px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-</head><body><main>
-<h1>ポケカ相場スキャナー V6</h1>
+</head>
+<body><main>
+<h1>ポケカ相場スキャナー V7</h1>
 <div class="box">
-<p><b>無料OCR・複数解析版</b></p>
+<p><b>無料OCR・カード名特化版</b></p>
 <input id="file" type="file" accept="image/*" capture="environment">
 <img id="preview" hidden>
 </div>
 <div class="box">
 <div id="status" class="muted">カードを撮影してください。</div>
 <div id="ocr"></div>
+<div id="manualBox"></div>
 <div id="matches"></div>
 </div>
 <script>
 const API='https://api.tcgdex.net/v2/ja';
-const file=document.getElementById('file'), preview=document.getElementById('preview');
-const status=document.getElementById('status'), ocr=document.getElementById('ocr'), matches=document.getElementById('matches');
-let allCards=null;
+const file=document.getElementById('file'),preview=document.getElementById('preview');
+const status=document.getElementById('status'),ocr=document.getElementById('ocr');
+const matches=document.getElementById('matches'),manualBox=document.getElementById('manualBox');
 
 file.onchange=async()=>{
- const f=file.files[0]; if(!f)return;
- preview.src=URL.createObjectURL(f); preview.hidden=false;
- ocr.innerHTML='';matches.innerHTML='';
+ const f=file.files[0];if(!f)return;
+ preview.src=URL.createObjectURL(f);preview.hidden=false;
+ ocr.innerHTML='';matches.innerHTML='';manualBox.innerHTML='';
  try{
-  const img=await waitImage(preview);
-  status.textContent='カード名の位置を切り出しています…';
-  const crops=makeCrops(img);
-  status.textContent='日本語OCRを実行中…';
+  const img=await load(preview);
+  status.textContent='カード名の場所を解析中…';
+  const crops=makeNameCrops(img);
+  status.textContent='「カード名」部分だけをOCRしています…';
   const worker=await Tesseract.createWorker('jpn',1,{
-    langPath:'https://tessdata.projectnaptha.com/4.0.0',
-    logger:m=>{if(m.status==='recognizing text')status.textContent='OCR中… '+Math.round((m.progress||0)*100)+'%'}
+   langPath:'https://tessdata.projectnaptha.com/4.0.0',
+   logger:m=>{if(m.status==='recognizing text')status.textContent='OCR中… '+Math.round((m.progress||0)*100)+'%'}
   });
-  await worker.setParameters({tessedit_pageseg_mode:'7',preserve_interword_spaces:'1'});
-  let texts=[];
+  await worker.setParameters({
+   tessedit_pageseg_mode:'7',
+   preserve_interword_spaces:'0',
+   user_defined_dpi:'300'
+  });
+  let raw=[];
   for(let i=0;i<crops.length;i++){
-    const r=await worker.recognize(crops[i]);
-    const t=(r.data.text||'').replace(/\s+/g,' ').trim();
-    if(t)texts.push(t);
+   const r=await worker.recognize(crops[i]);
+   const t=(r.data.text||'').replace(/\s+/g,' ').trim();
+   if(t)raw.push(t);
   }
   await worker.terminate();
-  const unique=[...new Set(texts)];
+  const unique=[...new Set(raw)];
   ocr.innerHTML='<b>OCR結果</b><br>'+unique.map(esc).join('<br>')+'<hr>';
-  status.textContent='カード名候補を照合中…';
-  await matchNames(unique);
+  status.textContent='カード候補を照合中…';
+  await searchFromOCR(unique);
  }catch(e){status.textContent='エラー：'+e.message;status.className='err'}
 };
 
-function waitImage(el){return new Promise((res,rej)=>{el.onload=()=>res(el);el.onerror=rej})}
+function load(el){return new Promise((res,rej)=>{el.onload=()=>res(el);el.onerror=rej})}
 
-function makeCrops(img){
+/*
+  日本版ポケカの標準レイアウトを想定。
+  カード名はカード画像の上端からおおむね8〜22%、
+  左端からおおむね5〜48%にあるため、その領域を中心に複数切り出し。
+*/
+function makeNameCrops(img){
  const W=img.naturalWidth,H=img.naturalHeight;
- // 日本版ポケカのタイトル付近を複数パターンで切り出す
  const specs=[
-  [0.02,0.00,0.78,0.16],
-  [0.00,0.02,0.90,0.22],
-  [0.03,0.00,1.00,0.20],
-  [0.00,0.05,0.72,0.28]
+  [0.03,0.065,0.52,0.105],
+  [0.02,0.045,0.62,0.14],
+  [0.05,0.075,0.43,0.09],
+  [0.00,0.08,0.70,0.13],
+  [0.08,0.055,0.50,0.16]
  ];
  return specs.map(s=>{
-   const [x,y,w,h]=s,c=document.createElement('canvas');
-   const sw=Math.min(W*w,900), sh=H*h;
-   const scale=Math.min(4,1800/sw);
-   c.width=Math.round(sw*scale);c.height=Math.round(sh*scale);
-   const ctx=c.getContext('2d');
-   ctx.drawImage(img,W*x,H*y,sw,sh,0,0,c.width,c.height);
-   const d=ctx.getImageData(0,0,c.width,c.height),p=d.data;
-   for(let i=0;i<p.length;i+=4){
-     const g=.299*p[i]+.587*p[i+1]+.114*p[i+2];
-     const v=g<150?0:255;
-     p[i]=p[i+1]=p[i+2]=v;
-   }
-   ctx.putImageData(d,0,0);
-   return c;
+  const [x,y,w,h]=s;
+  const sx=W*x,sy=H*y,sw=W*w,sh=H*h;
+  const c=document.createElement('canvas');
+  const scale=Math.min(5,2000/Math.max(sw,1));
+  c.width=Math.max(800,Math.round(sw*scale));
+  c.height=Math.max(180,Math.round(sh*scale));
+  const ctx=c.getContext('2d');
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+
+  // グレースケール＋コントラスト強調
+  const d=ctx.getImageData(0,0,c.width,c.height),p=d.data;
+  for(let i=0;i<p.length;i+=4){
+   let g=.299*p[i]+.587*p[i+1]+.114*p[i+2];
+   g=(g-128)*1.8+128;
+   g=Math.max(0,Math.min(255,g));
+   p[i]=p[i+1]=p[i+2]=g;
+  }
+  ctx.putImageData(d,0,0);
+  return c;
  });
 }
 
-async function matchNames(texts){
- const clean=[...new Set(texts.flatMap(t=>[
-   t.replace(/[^\u3040-\u30ff\u3400-\u9fffA-Za-z0-9ー]/g,''),
-   t.replace(/[^ぁ-んァ-ヶ一-龯]/g,'')
- ]).filter(x=>x.length>=2))];
- let candidates=[];
- // まずOCR文字列をそのままTCGdex検索
- for(const q of clean.slice(0,8)){
-   try{
-    const r=await fetch(API+'/cards?name='+encodeURIComponent(q)+'&pagination:page=1&pagination:itemsPerPage=20');
-    if(r.ok){const j=await r.json();candidates.push(...(Array.isArray(j)?j:(j.data||[])))}
-   }catch(e){}
- }
- const map=new Map(candidates.map(c=>[c.id,c]));
- const arr=[...map.values()];
- if(arr.length){render(arr.slice(0,20));status.textContent='候補が見つかりました。カードを選んでください。';return}
- status.textContent='自動候補を特定できませんでした。';
- matches.innerHTML=`<p>OCRが「マリィ」のような短い名前を正しく読めない場合があります。</p>
- <p><b>カード名を手入力して検索</b></p>
- <input id="manual" placeholder="例：マリィ">
- <button onclick="manualSearch()">検索</button>`;
+function normalize(s){
+ return s.normalize('NFKC')
+  .replace(/[|｜]/g,'')
+  .replace(/[\s　]+/g,'')
+  .trim();
 }
+
+function variants(s){
+ const n=normalize(s),out=new Set();
+ if(n.length>=2)out.add(n);
+ // OCRが似た文字を拾った場合の軽い正規化
+ const v=n.replace(/[ッツ]/g,'ッ').replace(/[ィイ]/g,'イ').replace(/[ゥウ]/g,'ウ');
+ if(v.length>=2)out.add(v);
+ return [...out];
+}
+
+async function searchFromOCR(texts){
+ let terms=[];
+ for(const t of texts)terms.push(...variants(t));
+ // 「マリィ」など短い日本語名を拾いやすくする。
+ terms=[...new Set(terms)].filter(x=>x.length>=2).slice(0,12);
+
+ let map=new Map();
+ for(const q of terms){
+  try{
+   const r=await fetch(API+'/cards?name='+encodeURIComponent(q)+'&pagination:page=1&pagination:itemsPerPage=20');
+   if(!r.ok)continue;
+   const j=await r.json();
+   const a=Array.isArray(j)?j:(j.data||[]);
+   for(const c of a)map.set(c.id,c);
+  }catch(e){}
+ }
+ const arr=[...map.values()];
+ if(arr.length){
+  render(arr.slice(0,20));
+  status.textContent='候補が見つかりました。カードを選んでください。';
+ }else{
+  status.textContent='自動候補を特定できませんでした。';
+  manualBox.innerHTML='<p><b>カード名を入力して検索</b></p><input id="manual" type="text" placeholder="例：マリィ"><button onclick="manualSearch()">検索</button><p class="small">OCRが苦手な場合でも、ここからカードを特定できます。</p>';
+ }
+}
+
 async function manualSearch(){
  const q=document.getElementById('manual').value.trim();if(!q)return;
- status.textContent='検索中…';
+ status.textContent='検索中…';matches.innerHTML='';
  try{
   const r=await fetch(API+'/cards?name='+encodeURIComponent(q)+'&pagination:page=1&pagination:itemsPerPage=30');
   const j=await r.json();const a=Array.isArray(j)?j:(j.data||[]);
   render(a);status.textContent=a.length?'候補を選んでください。':'見つかりませんでした。';
  }catch(e){status.textContent='検索エラー：'+e.message}
 }
+
 function render(a){
  matches.innerHTML=a.map(c=>`<div class="result" onclick="detail('${encodeURIComponent(c.id)}')">
- <img src="${c.image?c.image+'/high.webp':''}">
- <div><b>${esc(c.name||'')}</b><br>${esc(c.id||'')}<br><span class="muted">タップして詳細</span></div></div>`).join('');
+ <img src="${c.image?c.image+'/high.webp':''}" onerror="this.style.display='none'">
+ <div><b>${esc(c.name||'')}</b><br>${esc(c.id||'')}<br><span class="muted">タップしてカードを確定</span></div>
+ </div>`).join('');
 }
+
 async function detail(id){
- id=decodeURIComponent(id);status.textContent='詳細取得中…';
- const r=await fetch(API+'/cards/'+encodeURIComponent(id));const c=await r.json();
- matches.innerHTML=`<h2>${esc(c.name||'')}</h2><p>ID：${esc(c.id||'')}</p>
- <img src="${c.image?c.image+'/high.webp':''}" style="max-width:260px">
- <p>カードの特定に成功しました。次の段階で価格データを接続できます。</p>`;
- status.textContent='認識完了';
+ id=decodeURIComponent(id);status.textContent='カード詳細を取得中…';
+ try{
+  const r=await fetch(API+'/cards/'+encodeURIComponent(id));if(!r.ok)throw Error('取得失敗');
+  const c=await r.json();
+  matches.innerHTML=`<h2>${esc(c.name||'')}</h2><p>ID：${esc(c.id||'')}</p>
+  <img src="${c.image?c.image+'/high.webp':''}" style="max-width:280px">
+  <p class="ok">カードを特定できました。</p>
+  <p class="muted">次の段階で、このカードの価格データを接続できます。</p>`;
+  status.textContent='認識完了';
+ }catch(e){status.textContent='詳細取得エラー：'+e.message}
 }
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 </script></main></body></html>
